@@ -1,0 +1,9 @@
+Adj:Fem+SG	A1	KEY1
+Adj:Fem+SG	B2	A1
+Adj:Fem+SG	B3	B2
+Adj:Fem+SG	B4	C1
+Adj:Fem+SG	C1	A1
+Adj:Fem+SG	C1	C2
+Adj:Fem+SG	C2	B4
+Adj:Fem+SG	E3	C5
+Adj:Fem+SG	C5	KEY0
