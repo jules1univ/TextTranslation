@@ -1,24 +1,19 @@
 #pragma once
 #include "stdafx.h"
 
-
-#ifdef _DEBUG
-#define MEASURE(name, x)                                                                 \
-    {                                                                                    \
-        LARGE_INTEGER start, end, frequency;                                             \
-        long long elapsed_time;                                                          \
-        QueryPerformanceFrequency(&frequency);                                           \
-        QueryPerformanceCounter(&start);                                                 \
-        x;                                                                               \
-        QueryPerformanceCounter(&end);                                                   \
-        elapsed_time = (end.QuadPart - start.QuadPart) * 100000000 / frequency.QuadPart; \
-        std::cout << '[' << name << "]: " << (elapsed_time / 100000.f) << " ms\n";       \
-    }
+#if defined(_DEBUG)
+#define MEASURE(name, x)                                                                                \
+{                                                                                                       \
+        auto start = std::chrono::high_resolution_clock::now();                                         \
+        x;                                                                                              \
+        auto end = std::chrono::high_resolution_clock::now();                                           \
+        double duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();     \
+        std::cout << '[' << name << "]: " << (duration / 1000.0) << " ms\n";                            \
+}
 
 #else
 #define MEASURE(name, x) x;
 #endif // _DEBUG
-
 
 typedef struct LinkTable
 {
@@ -29,8 +24,8 @@ typedef struct LinkTable
 LinkTable CreateLinkTable(const std::string &defaultRootPath, const std::string &outRootPath, std::unordered_set<std::string> &targets);
 LinkTable LoadLinkTable(const std::string &outRootPath);
 
-void CreateLinkTree(const std::string& defaultRootPath, const std::string& outRootPath, const std::string& outLinkPath, std::unordered_set<std::string>& targets);
-void GroupLinkNodes(const std::string& target, std::unordered_set<std::string>& nodes, LinkTable& table);
+void CreateLinkTree(const std::string &defaultRootPath, const std::string &outRootPath, const std::string &outLinkPath, std::unordered_set<std::string> &targets);
+void GroupLinkNodes(const std::string &target, std::unordered_set<std::string> &nodes, LinkTable &table);
 
 std::vector<std::string> Split(const std::string &s, char delim);
-void SortFile(const std::string& path);
+void SortFile(const std::string &path);

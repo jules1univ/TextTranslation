@@ -99,10 +99,18 @@ LinkTable LoadLinkTable(const std::string& outRootPath)
 
 void CreateLinkTree(const std::string& defaultRootPath, const std::string& outRootPath, const std::string& outLinkPath, std::unordered_set<std::string>& targets)
 {
-	DWORD attr = GetFileAttributesA(outRootPath.c_str());
 
 	LinkTable table{};
+
+#if defined(_WIN32)
+	DWORD attr = GetFileAttributesA(outRootPath.c_str());
 	if (!(attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)))
+#elif defined(__linux__)
+  struct stat buffer;   
+  if(stat (outRootPath.c_str(), &buffer) != 0)) 
+#else
+	if(!file_exists(outRootPath))
+#endif
 	{
 		MEASURE("create_table", {
 			table = CreateLinkTable(defaultRootPath, outRootPath, targets);

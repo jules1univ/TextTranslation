@@ -4,9 +4,16 @@ import java.io.File;
 import java.util.HashMap;
 
 public class NativeLinker {
-    private static final File path = new File("linker.dll");
+
+    private static File path = null;
 
     static {
+        if (System.getProperty("os.name").contains("win")) {
+            path = new File("linker.dll");
+        } else {
+            path = new File("linker.so");
+        }
+        
         if (path.exists()) {
             System.load(path.getAbsolutePath());
         }
