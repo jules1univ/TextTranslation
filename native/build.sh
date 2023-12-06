@@ -1,6 +1,7 @@
 #!/bin/bash
 
-JDK_PATH=""
+
+JDK_PATH=$(dirname $(dirname $(readlink -f $(which java))))
 CC="g++"
 
 OUTPUT_DIR="../"

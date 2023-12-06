@@ -107,7 +107,7 @@ void CreateLinkTree(const std::string& defaultRootPath, const std::string& outRo
 	if (!(attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)))
 #elif defined(__linux__)
   struct stat buffer;   
-  if(stat (outRootPath.c_str(), &buffer) != 0)) 
+  if(stat (outRootPath.c_str(), &buffer) != 0)
 #else
 	if(!file_exists(outRootPath))
 #endif
