@@ -5,3 +5,5 @@ words.trd
 *.dll
 *.so
 TextTranslation.jar
+win.TextTranslation.jar
+linux.TextTranslation.jar
