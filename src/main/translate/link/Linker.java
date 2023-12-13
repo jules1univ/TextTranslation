@@ -16,6 +16,10 @@ public class Linker {
     private final File cachedLinkFile = new File("lib/traduction/link.trd");
     private final File defaultRootFile = new File("lib/racines.txt");
 
+    // private final File cachedRootFile = new File("native/test/root_java_test.txt");
+    // private final File cachedLinkFile = new File("native/test/link_java_test.txt");
+    // private final File defaultRootFile = new File("native/test/racines.txt");
+
     HashMap<String, HashSet<String>> treeKeys = new HashMap<>();
     HashMap<String, String> treeValues = new HashMap<>();
 
@@ -25,98 +29,15 @@ public class Linker {
 
     }
 
-    /**
-     * @deprecated
-     * 
-     *             private void treeSearch(String key, HashSet<String> out,
-     *             List<String> lines) {
-     *             for (int i = 0; i < lines.size(); i++) {
-     *             String[] parts = lines.get(i).split("=");
-     * 
-     *             if (parts[0].equals(key) && !out.contains(parts[1])) {
-     *             lines.remove(i);
-     *             i--;
-     * 
-     *             out.add(parts[1]);
-     *             treeSearch(parts[1], out, lines);
-     * 
-     *             } else if (parts[1].equals(key) && !out.contains(parts[0])) {
-     *             lines.remove(i);
-     *             i--;
-     * 
-     *             out.add(parts[0]);
-     *             treeSearch(parts[0], out, lines);
-     * 
-     *             }
-     *             }
-     *             }
-     */
-
-    /**
-     * @deprecated
-     *             private void createLinkCacheFromRoot(HashMap<String, String>
-     *             words) {
-     *             List<String> lines = FileManager.read(cachedRootFile).get();
-     * 
-     *             for (int i = 0; i < lines.size(); i++) {
-     *             String[] parts = lines.get(i).split("=");
-     * 
-     *             if (words.containsKey(parts[1]) &&
-     *             !this.tree.containsKey(parts[1])) {
-     *             lines.remove(i);
-     *             i--;
-     * 
-     *             HashSet<String> out = new HashSet<>();
-     * 
-     *             treeSearch(parts[0], out, lines);
-     *             treeSearch(parts[1], out, lines);
-     * 
-     *             tree.put(parts[1], out);
-     *             }
-     *             }
-     * 
-     *             List<String> cache = new ArrayList<>();
-     *             tree.forEach((key, values) -> {
-     *             values.forEach(value -> {
-     *             if (value != key) {
-     *             cache.add(String.format("%s=%s", value, key));
-     *             }
-     *             });
-     *             });
-     *             Collections.sort(cache);
-     *             FileManager.write(cachedLinkFile, cache);
-     * 
-     *             this.links = cache.toArray(new String[0]);
-     *             }
-     */
-
-    /**
-     * @deprecated
-     *             private void createRootCache() {
-     *             List<String> lines =
-     *             FileManager.read(defaultRootFile).orElse(Collections.emptyList());
-     * 
-     *             lines.parallelStream()
-     *             .filter(line -> line.length() > 2)
-     *             .map(line -> {
-     *             String[] parts = line.toLowerCase().split("\t");
-     *             if (parts.length < 3 && !parts[1].equals(parts[2])) {
-     *             return null;
-     *             }
-     *             return String.format("%s=%s", parts[1], parts[2]);
-     *             })
-     *             .filter(Objects::nonNull)
-     *             .sorted()
-     *             .collect(FileManager.write(cachedRootFile));
-     *             }
-     */
-
     private void groupLinkNodes(String link, HashSet<String> nodes) {
         for (String key : treeValues.keySet()) {
-            if (nodes.contains(treeValues.get(key)) && key == link) {
-                //  TODO
-            } else if (nodes.contains(key) && treeValues.get(key) == link) {
-                // TODO
+        
+            if (key.equals(link)) {
+                nodes.add(treeValues.get(key));
+                this.groupLinkNodes(treeValues.get(key), nodes);
+            }else if (treeValues.get(key).equals(link)) {
+                nodes.add(key);
+                this.groupLinkNodes(key, nodes);
             }
         }
     }
@@ -127,6 +48,8 @@ public class Linker {
         for (String key : treeKeys.keySet()) {
             for (String link : treeKeys.get(key)) {
                 HashSet<String> nodes = new HashSet<>();
+                nodes.add(link);
+
                 this.groupLinkNodes(link, nodes);
 
                 for (String node : nodes) {
@@ -140,24 +63,24 @@ public class Linker {
     private void createRootCache(HashMap<String, String> words) {
 
         List<String> lines = FileManager.read(defaultRootFile).orElse(Collections.emptyList());
-        lines
-                .parallelStream()
-                .forEach(line -> {
-                    if (line.length() <= 10 || line.charAt(0) == '%') {
-                        return;
-                    }
-                    String[] parts = line.split("\t");
-                    if (parts.length < 3 || parts[1].equals(parts[2])) {
-                        return;
-                    }
+        for (String line : lines) {
 
-                    if (words.containsKey(parts[2])) {
-                        HashSet<String> set = new HashSet<>();
-                        treeKeys.put(parts[2], set);
-                    } else {
-                        treeValues.put(parts[1], parts[2]);
-                    }
-                });
+            if (line.length() <= 10 || line.charAt(0) == '%') {
+                return;
+            }
+            String[] parts = line.split("\t");
+            if (parts.length < 3 || parts[1].equals(parts[2])) {
+                return;
+            }
+
+            if (words.containsKey(parts[2])) {
+                HashSet<String> set = new HashSet<>();
+                set.add(parts[1]);
+                treeKeys.put(parts[2], set);
+            } else {
+                treeValues.put(parts[1], parts[2]);
+            }
+        }
 
         List<String> outLines = new ArrayList<>();
         outLines.add(String.format("%d", treeKeys.size()));
@@ -180,7 +103,7 @@ public class Linker {
 
     private void loadRootCache() {
         List<String> lines = FileManager.read(cachedRootFile).get();
-        int links_len = Integer.parseInt(lines.get(0));
+        int links_len = Integer.parseInt(lines.get(0)) + 1;
 
         for (int i = 1; i < links_len; i++) {
 
@@ -196,7 +119,7 @@ public class Linker {
 
         for (int i = links_len; i < lines.size(); i++) {
             String[] parts = lines.get(i).split("=");
-            treeValues.put(parts[1], parts[2]);
+            treeValues.put(parts[0], parts[1]);
         }
     }
 
@@ -214,7 +137,6 @@ public class Linker {
         if (nativeLinker.isReady()) {
             nativeLinker.create(this.defaultRootFile.getAbsolutePath(), this.cachedRootFile.getAbsolutePath(),
                     this.cachedLinkFile.getAbsolutePath(), words);
-            this.loadLinkCache();
         } else {
             if (!this.cachedRootFile.exists()) {
                 this.createRootCache(words);
@@ -226,6 +148,8 @@ public class Linker {
                 this.createLinkTree();
             }
         }
+        this.loadLinkCache();
+
     }
 
     public void load() {
