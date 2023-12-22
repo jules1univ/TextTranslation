@@ -1,6 +1,9 @@
 #pragma once
 #include "stdafx.h"
 
+#define MIN_LINE_CONTENT 5
+#define MIN_ROOT_ITEMS 3
+
 #if defined(_DEBUG)
 #define MEASURE(name, x)                                                                                \
 {                                                                                                       \

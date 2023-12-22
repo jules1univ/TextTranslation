@@ -1,7 +1,6 @@
 #include "linker.h"
 
-
-LinkTable CreateLinkTable(const std::string& defaultRootPath, const std::string& outRootPath, std::unordered_set<std::string>& targets)
+LinkTable CreateLinkTable(const std::string &defaultRootPath, const std::string &outRootPath, std::unordered_set<std::string> &targets)
 {
 	LinkTable table = {};
 
@@ -12,18 +11,18 @@ LinkTable CreateLinkTable(const std::string& defaultRootPath, const std::string&
 	std::string line;
 	while (std::getline(defaultRootFile, line))
 	{
-		if (line.size() <= 10 || line[0] == '%')
+		if (line.size() <= MIN_LINE_CONTENT || line[0] == '%')
 		{
 			continue;
 		}
 
 		std::vector<std::string> items = Split(line, '\t');
-		if (items.size() < 3)
+		if (items.size() < MIN_ROOT_ITEMS)
 		{
 			continue;
 		}
-		
-		if (items[1] == items[2])
+
+		if (items[1].compare(items[2]) == 0)
 		{
 			continue;
 		}
@@ -44,16 +43,16 @@ LinkTable CreateLinkTable(const std::string& defaultRootPath, const std::string&
 		return table;
 
 	outRootFile << table.keys.size() << '\n';
-	for (const auto& [key, links] : table.keys)
+	for (const auto &[key, links] : table.keys)
 	{
 		outRootFile << key;
-		for (const auto& link : links)
+		for (const auto &link : links)
 		{
 			outRootFile << '=' << link;
 		}
 		outRootFile << '\n';
 	}
-	for (const auto& [key, value] : table.values)
+	for (const auto &[key, value] : table.values)
 	{
 		outRootFile << key << '=' << value << '\n';
 	}
@@ -62,7 +61,7 @@ LinkTable CreateLinkTable(const std::string& defaultRootPath, const std::string&
 	return table;
 }
 
-LinkTable LoadLinkTable(const std::string& outRootPath)
+LinkTable LoadLinkTable(const std::string &outRootPath)
 {
 	LinkTable table;
 
@@ -87,7 +86,8 @@ LinkTable LoadLinkTable(const std::string& outRootPath)
 				table.keys[items[0]].insert(items[i]);
 			}
 		}
-		else {
+		else
+		{
 			std::vector<std::string> items = Split(line, '=');
 			table.values.emplace_back(std::make_pair(items[0], items[1]));
 		}
@@ -97,7 +97,7 @@ LinkTable LoadLinkTable(const std::string& outRootPath)
 	return table;
 }
 
-void CreateLinkTree(const std::string& defaultRootPath, const std::string& outRootPath, const std::string& outLinkPath, std::unordered_set<std::string>& targets)
+void CreateLinkTree(const std::string &defaultRootPath, const std::string &outRootPath, const std::string &outLinkPath, std::unordered_set<std::string> &targets)
 {
 
 	LinkTable table{};
@@ -106,10 +106,10 @@ void CreateLinkTree(const std::string& defaultRootPath, const std::string& outRo
 	DWORD attr = GetFileAttributesA(outRootPath.c_str());
 	if (!(attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)))
 #elif defined(__linux__)
-  struct stat buffer;   
-  if(stat (outRootPath.c_str(), &buffer) != 0)
+	struct stat buffer;
+	if (stat(outRootPath.c_str(), &buffer) != 0)
 #else
-	if(!file_exists(outRootPath))
+	if (!file_exists(outRootPath))
 #endif
 	{
 		MEASURE("create_table", {
@@ -126,24 +126,21 @@ void CreateLinkTree(const std::string& defaultRootPath, const std::string& outRo
 	std::ofstream outLinkFile(outLinkPath);
 	if (!outLinkFile.good())
 		return;
-	
+
 	MEASURE("link_table", {
 		size_t i = 0;
-		for (const auto& [key, links] : table.keys)
+		for (const auto &[key, links] : table.keys)
 		{
 			MEASURE("group (" << key << ')', {
-				for (const auto& link : links)
+				for (const auto &link : links)
 				{
-					std::unordered_set<std::string> nodes = { link };
+					std::unordered_set<std::string> nodes = {link};
 					GroupLinkNodes(link, nodes, table);
-		
-					for (const std::string& node : nodes)
+
+					for (const std::string &node : nodes)
 					{
 						outLinkFile << node << '=' << key << '\n';
 					}
-					
-
-					
 				}
 			});
 			std::cout << (i / (float)table.keys.size()) * 100.f << "%\n";
@@ -152,10 +149,13 @@ void CreateLinkTree(const std::string& defaultRootPath, const std::string& outRo
 	});
 
 	outLinkFile.close();
-	SortFile(outLinkPath);
+
+	MEASURE("sort_table", {
+		SortFile(outLinkPath);
+	});
 }
 
-void GroupLinkNodes(const std::string& target, std::unordered_set<std::string>& nodes, LinkTable& table)
+void GroupLinkNodes(const std::string &target, std::unordered_set<std::string> &nodes, LinkTable &table)
 {
 	for (size_t i = 0; i < table.values.size(); i++)
 	{
@@ -184,34 +184,36 @@ void GroupLinkNodes(const std::string& target, std::unordered_set<std::string>& 
 std::vector<std::string> Split(const std::string &s, char delim)
 {
 	std::vector<std::string> items;
-	std::istringstream ss(s);
+	items.reserve(std::count(s.begin(), s.end(), delim) + 1);
 
-	for (std::string item;
-		 std::getline(ss, item, delim);
-		 items.push_back(item))
-		;
+	std::istringstream ss(s);
+	for (std::string item; std::getline(ss, item, delim); items.push_back(item));
+
 	return items;
 }
 
 void SortFile(const std::string& path)
 {
-	std::vector<std::string> lines;
-	std::fstream file(path);
-	if (!file.good()) return;
+	std::ifstream infile(path);
+	if (!infile.good())
+		return;
 
-	std::string line;
-	while (std::getline(file, line))
-	{
-		lines.push_back(line);
-	}
-	file.close();
+	std::vector<std::string> lines;
+	for (std::string line; std::getline(infile, line); lines.push_back(line));
+
+	infile.close();
+
 	std::sort(lines.begin(), lines.end());
 
-	file.open(path);
-	if (!file.good()) return;
-	for (const auto& sortedLine : lines)
+	std::ofstream outfile(path);
+	
+	if (!outfile.good())
+		return;
+
+	for (const std::string& line : lines)
 	{
-		file << sortedLine << '\n';
+		outfile << line << '\n';
 	}
-	file.close();
+
+	outfile.close();
 }

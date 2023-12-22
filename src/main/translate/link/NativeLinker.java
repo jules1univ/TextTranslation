@@ -9,7 +9,7 @@ public class NativeLinker {
     private static boolean load = false;
 
     static {
-        if (System.getProperty("os.name").contains("win")) {
+        if (System.getProperty("os.name").toLowerCase().contains("win")) {
             path = new File("linker.dll");
         } else {
             path = new File("linker.so");
