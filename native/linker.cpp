@@ -56,7 +56,8 @@ std::unique_ptr<LinkTable> CreateLinkTable(const std::string &defaultRootPath, c
 	}
 	for (const auto& [left, right] : table->values.get_map())
 	{
-		outRootFile << left << '=' << right << '\n';
+
+		outRootFile << left << '=' << *right << '\n';
 	}
 	outRootFile.close();
 
