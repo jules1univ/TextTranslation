@@ -26,12 +26,10 @@ JNIEXPORT void JNICALL Java_main_translate_link_NativeLinker_create(JNIEnv* env,
 	}
 	env->DeleteLocalRef(keysArray);
 
-	MEASURE("total", {
 		CreateLinkTree(
 		env->GetStringUTFChars(defaultRootPath, nullptr),
 		env->GetStringUTFChars(outRootPath, nullptr),
 		env->GetStringUTFChars(outLinkPath, nullptr),
 		keys);
-	});
 	
 }

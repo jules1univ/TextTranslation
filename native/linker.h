@@ -1,34 +1,24 @@
 #pragma once
 #include "stdafx.h"
+#include "bmap.h"
 
 #define MIN_LINE_CONTENT 5
 #define MIN_ROOT_ITEMS 3
+#define LINK_AVERAGE_DEPTH 3
 
-#if defined(_DEBUG)
-#define MEASURE(name, x)                                                                                \
-{                                                                                                       \
-        auto start = std::chrono::high_resolution_clock::now();                                         \
-        x;                                                                                              \
-        auto end = std::chrono::high_resolution_clock::now();                                           \
-        double duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();     \
-        std::cout << '[' << name << "]: " << (duration / 1000.0) << " ms\n";                            \
-}
-
-#else
-#define MEASURE(name, x) x;
-#endif // _DEBUG
 
 typedef struct LinkTable
 {
     std::unordered_map<std::string, std::unordered_set<std::string>> keys;
-    std::vector<std::pair<std::string, std::string>> values;
+    BiStrMap values;
 } LinkTable;
 
-LinkTable CreateLinkTable(const std::string &defaultRootPath, const std::string &outRootPath, std::unordered_set<std::string> &targets);
-LinkTable LoadLinkTable(const std::string &outRootPath);
+std::unique_ptr<LinkTable> CreateLinkTable(const std::string &defaultRootPath, const std::string &outRootPath, std::unordered_set<std::string> &targets);
+std::unique_ptr<LinkTable> LoadLinkTable(const std::string &outRootPath);
 
+void CreateGroupLinkRange(size_t start, size_t end, std::vector<std::string>& keys, std::unique_ptr<LinkTable>& table, std::ostringstream& buffer);
 void CreateLinkTree(const std::string &defaultRootPath, const std::string &outRootPath, const std::string &outLinkPath, std::unordered_set<std::string> &targets);
-void GroupLinkNodes(const std::string &target, std::unordered_set<std::string> &nodes, LinkTable &table);
+void GroupLinkNodes(const std::string &target, std::unordered_set<std::string> &nodes, std::unique_ptr<LinkTable>& table);
 
 std::vector<std::string> Split(const std::string &s, char delim);
 void SortFile(const std::string &path);

@@ -1,8 +1,10 @@
 #include "linker.h"
 
-LinkTable CreateLinkTable(const std::string &defaultRootPath, const std::string &outRootPath, std::unordered_set<std::string> &targets)
+static std::mutex _bufferMutex;
+
+std::unique_ptr<LinkTable> CreateLinkTable(const std::string &defaultRootPath, const std::string &outRootPath, std::unordered_set<std::string> &targets)
 {
-	LinkTable table = {};
+	auto table = std::make_unique<LinkTable>();
 
 	std::ifstream defaultRootFile(defaultRootPath);
 	if (!defaultRootFile.good())
@@ -29,11 +31,11 @@ LinkTable CreateLinkTable(const std::string &defaultRootPath, const std::string 
 
 		if (targets.find(items[2]) != targets.end())
 		{
-			table.keys[items[2]].insert(items[1]);
+			table->keys[items[2]].insert(items[1]);
 		}
 		else
 		{
-			table.values.emplace_back(std::make_pair(items[1], items[2]));
+			table->values.insert(items[1], items[2]);
 		}
 	}
 	defaultRootFile.close();
@@ -42,8 +44,8 @@ LinkTable CreateLinkTable(const std::string &defaultRootPath, const std::string 
 	if (!outRootFile.good())
 		return table;
 
-	outRootFile << table.keys.size() << '\n';
-	for (const auto &[key, links] : table.keys)
+	outRootFile << table->keys.size() << '\n';
+	for (const auto &[key, links] : table->keys)
 	{
 		outRootFile << key;
 		for (const auto &link : links)
@@ -52,18 +54,18 @@ LinkTable CreateLinkTable(const std::string &defaultRootPath, const std::string 
 		}
 		outRootFile << '\n';
 	}
-	for (const auto &[key, value] : table.values)
+	for (const auto& [left, right] : table->values.get_map())
 	{
-		outRootFile << key << '=' << value << '\n';
+		outRootFile << left << '=' << right << '\n';
 	}
 	outRootFile.close();
 
 	return table;
 }
 
-LinkTable LoadLinkTable(const std::string &outRootPath)
+std::unique_ptr<LinkTable> LoadLinkTable(const std::string &outRootPath)
 {
-	LinkTable table;
+	auto table = std::make_unique<LinkTable>();
 
 	std::ifstream inRootFile(outRootPath);
 	if (!inRootFile.good())
@@ -83,13 +85,13 @@ LinkTable LoadLinkTable(const std::string &outRootPath)
 			std::vector<std::string> items = Split(line, '=');
 			for (size_t i = 1; i < items.size(); i++)
 			{
-				table.keys[items[0]].insert(items[i]);
+				table->keys[items[0]].insert(items[i]);
 			}
 		}
 		else
 		{
 			std::vector<std::string> items = Split(line, '=');
-			table.values.emplace_back(std::make_pair(items[0], items[1]));
+			table->values.insert(items[0], items[1]);
 		}
 	}
 	inRootFile.close();
@@ -97,10 +99,9 @@ LinkTable LoadLinkTable(const std::string &outRootPath)
 	return table;
 }
 
-void CreateLinkTree(const std::string &defaultRootPath, const std::string &outRootPath, const std::string &outLinkPath, std::unordered_set<std::string> &targets)
+void CreateLinkTree(const std::string& defaultRootPath, const std::string& outRootPath, const std::string& outLinkPath, std::unordered_set<std::string>& targets)
 {
-
-	LinkTable table{};
+	std::unique_ptr<LinkTable> table;
 
 #if defined(_WIN32)
 	DWORD attr = GetFileAttributesA(outRootPath.c_str());
@@ -112,71 +113,114 @@ void CreateLinkTree(const std::string &defaultRootPath, const std::string &outRo
 	if (!file_exists(outRootPath))
 #endif
 	{
-		MEASURE("create_table", {
-			table = CreateLinkTable(defaultRootPath, outRootPath, targets);
-		});
+		table = CreateLinkTable(defaultRootPath, outRootPath, targets);
 	}
 	else
 	{
-		MEASURE("load_table", {
-			table = LoadLinkTable(outRootPath);
+		table = LoadLinkTable(outRootPath);
+	}
+
+
+	std::ostringstream buffer;
+
+	std::vector<std::string> keys;
+	keys.reserve(table->keys.size());
+
+	std::transform(table->keys.begin(), table->keys.end(), std::back_inserter(keys), [](const auto& pair) { return pair.first; });
+
+	for (auto it = table->keys.begin(); it != table->keys.end(); it++)
+	{
+
+		std::unordered_set<std::string> nodes;
+		for (const auto& link : it->second)
+		{
+			nodes.insert(link);
+			GroupLinkNodes(link, nodes, table);
+		}
+
+		for (const std::string& node : nodes)
+		{
+			buffer << node << '=' << it->first << '\n';
+		}
+	}
+
+	
+	size_t size = std::thread::hardware_concurrency();
+	std::vector<std::thread> threads(size);
+	size_t part = (table->keys.size()/size);
+
+	for (size_t i = 0; i < size - 1; i++)
+	{
+		threads.emplace_back([&, i]() {
+			CreateGroupLinkRange((part * i), (part * (i+1)), keys, table, buffer);
 		});
 	}
+
+	threads.emplace_back([&]() {
+		CreateGroupLinkRange(table->keys.size() - part, table->keys.size(), keys,  table, buffer);
+	});
+
+	
+	for (auto& thread : threads)
+	{
+		if (thread.joinable())
+		{
+			thread.join();
+		}
+	}
+	
+	
 
 	std::ofstream outLinkFile(outLinkPath);
 	if (!outLinkFile.good())
 		return;
 
-	MEASURE("link_table", {
-		size_t i = 0;
-		for (const auto &[key, links] : table.keys)
-		{
-			MEASURE("group (" << key << ')', {
-				for (const auto &link : links)
-				{
-					std::unordered_set<std::string> nodes = {link};
-					GroupLinkNodes(link, nodes, table);
-
-					for (const std::string &node : nodes)
-					{
-						outLinkFile << node << '=' << key << '\n';
-					}
-				}
-			});
-			std::cout << (i / (float)table.keys.size()) * 100.f << "%\n";
-			i++;
-		}
-	});
-
+	outLinkFile << buffer.str();
 	outLinkFile.close();
 
-	MEASURE("sort_table", {
-		SortFile(outLinkPath);
-	});
+	SortFile(outLinkPath);
 }
 
-void GroupLinkNodes(const std::string &target, std::unordered_set<std::string> &nodes, LinkTable &table)
+void CreateGroupLinkRange(size_t start, size_t end, std::vector<std::string>& keys, std::unique_ptr<LinkTable>& table, std::ostringstream& buffer)
 {
-	for (size_t i = 0; i < table.values.size(); i++)
+	for (size_t i = start; i < end; i++)
 	{
-		if (nodes.find(table.values[i].second) == nodes.end() && table.values[i].first == target)
+		std::unordered_set<std::string> nodes;
+		for (const auto& link : table->keys[keys[i]])
 		{
-			std::string next_target = table.values[i].second;
-			table.values.erase(table.values.begin() + i);
-			i--;
-
-			nodes.insert(next_target);
-			GroupLinkNodes(next_target, nodes, table);
+			nodes.insert(link);
+			GroupLinkNodes(link, nodes, table);
 		}
-		else if (nodes.find(table.values[i].first) == nodes.end() && table.values[i].second == target)
+
+		_bufferMutex.lock();
+		for (const std::string& node : nodes)
 		{
+			buffer << node << '=' << keys[i] << '\n';
+		}
+		_bufferMutex.unlock();
+	}
+}
 
-			std::string next_target = table.values[i].first;
-			table.values.erase(table.values.begin() + i);
-			i--;
 
-			nodes.insert(next_target);
-			GroupLinkNodes(next_target, nodes, table);
+
+void GroupLinkNodes(const std::string &target, std::unordered_set<std::string> &nodes, std::unique_ptr<LinkTable>& table)
+{
+	if (table->values.left_contains(target))
+	{
+		const auto& nextTarget = table->values.get_left(target);
+		if (!nodes.contains(nextTarget))
+		{
+			nodes.insert(nextTarget);
+			GroupLinkNodes(nextTarget, nodes, table);
+		}
+
+	}else if (table->values.right_contains(target))
+	{
+		const auto& nextTarget = table->values.get_right(target);
+		if (!nodes.contains(nextTarget))
+		{
+			nodes.insert(nextTarget);
+			GroupLinkNodes(nextTarget, nodes, table);
 		}
 	}
 }

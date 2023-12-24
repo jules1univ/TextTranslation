@@ -28,6 +28,7 @@ public class Main {
 
 	public static void main(String[] args) {
 		translator.load();
+
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 			translator.close();
 		}));
